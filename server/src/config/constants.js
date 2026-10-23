@@ -1,0 +1,20 @@
+module.exports = {
+  CATEGORIES: ['Technology', 'Design', 'Languages', 'Music', 'Business', 'Cooking', 'Fitness', 'Arts & Crafts', 'Academics', 'Life Skills', 'Other'],
+  LEVELS: ['beginner', 'intermediate', 'advanced', 'expert'],
+  ROLES: ['user', 'moderator', 'admin'],
+  SIGNUP_BONUS: 10,
+  DAILY_LOGIN_POINTS: 5,
+  POINTS: { SESSION_TAUGHT: 50, SESSION_LEARNED: 20, REVIEW_GIVEN: 10, FORUM_POST: 5, FORUM_COMMENT: 2, ACCEPTED_ANSWER: 25, ASSESSMENT_PASSED: 40, SKILL_LISTED: 10 },
+  LEVEL_THRESHOLDS: [0, 100, 250, 500, 1000, 2000, 4000, 8000],
+  BADGES: [
+    { key: 'first_steps', name: 'First Steps', description: 'Completed your first exchange session', icon: '🌱' },
+    { key: 'mentor', name: 'Mentor', description: 'Taught 5 sessions', icon: '🎓' },
+    { key: 'master_mentor', name: 'Master Mentor', description: 'Taught 25 sessions', icon: '🏆' },
+    { key: 'eager_learner', name: 'Eager Learner', description: 'Attended 5 sessions as a learner', icon: '📚' },
+    { key: 'helpful', name: 'Helpful Voice', description: 'Had an answer accepted in the forum', icon: '💡' },
+    { key: 'certified', name: 'Certified', description: 'Earned your first certificate', icon: '📜' },
+    { key: 'streak_7', name: 'On a Roll', description: 'Logged in 7 days in a row', icon: '🔥' },
+    { key: 'top_rated', name: 'Top Rated', description: 'Average rating of 4.5+ across 5 reviews', icon: '⭐' },
+    { key: 'community', name: 'Community Builder', description: 'Created 10 forum posts', icon: '🤝' },
+  ],
+};
