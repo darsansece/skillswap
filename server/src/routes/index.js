@@ -85,6 +85,10 @@ r.post('/exchanges/:id/sessions/:sessionId/confirm', protect, ex.confirmSession)
 r.post('/exchanges/:id/review', protect, ex.review);
 r.put('/exchanges/:id/notes', protect, ex.updateNotes);
 r.post('/exchanges/:id/resources', protect, ex.addResource);
+r.get('/exchanges/:id/assessments', protect, ex.listAssessments);
+r.post('/exchanges/:id/assessments', protect, ex.createAssessment);
+r.post('/exchanges/:id/assessments/:assessmentId/submit', protect, ex.submitAssessment);
+r.delete('/exchanges/:id/assessments/:assessmentId', protect, ex.deleteAssessment);
 
 // ---- 5. Real-time communication ----
 r.get('/conversations', protect, chat.list);

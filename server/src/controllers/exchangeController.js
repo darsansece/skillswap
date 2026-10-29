@@ -1,11 +1,11 @@
-const { Exchange, Skill, User, Review } = require('../models');
+const { Exchange, Skill, User, Review, Assessment, Attempt } = require('../models');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { paginate } = require('../utils/paginate');
 const credits = require('../services/credits');
 const { addPoints } = require('../services/gamification');
 const { notify, emitToUser } = require('../services/notify');
-const { getOrCreateConversation } = require('./chatController');
+const { getOrCreateConversation, createMessage } = require('./chatController');
 const { POINTS } = require('../config/constants');
 
 const POP = [
@@ -268,4 +268,182 @@ exports.upcoming = asyncHandler(async (req, res) => {
     .map((s) => ({ ...s.toObject(), exchangeId: ex._id, skill: ex.skill, with: String(ex.requester._id) === String(me) ? ex.provider : ex.requester })))
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
   res.json({ items: sessions });
+});
+
+// ==========================================
+// Course Assessments & Evaluations
+// ==========================================
+
+exports.listAssessments = asyncHandler(async (req, res) => {
+  const ex = await loadExchange(req.params.id, req.user);
+  const assessments = await Assessment.find({ exchange: ex._id }).populate('createdBy', 'name email avatar').sort('-createdAt');
+  const attempts = await Attempt.find({ exchange: ex._id }).populate('user', 'name email avatar').sort('-submittedAt');
+  const isMentor = String(ex.provider?._id || ex.provider) === String(req.user._id);
+
+  const items = assessments.map((a) => {
+    const aObj = a.toObject();
+    const aAttempts = attempts.filter((att) => String(att.assessment) === String(a._id));
+    const myAttempts = aAttempts.filter((att) => String(att.user?._id || att.user) === String(req.user._id));
+    const latestAttempt = aAttempts[0] || null;
+    const myLatest = myAttempts[0] || null;
+
+    // If mentee hasn't taken it yet, strip correctIndex and explanation to avoid spoiling before attempt
+    if (!isMentor && !myLatest) {
+      aObj.questions = aObj.questions.map(({ correctIndex, explanation, ...rest }) => rest);
+    }
+
+    return {
+      ...aObj,
+      attempts: aAttempts,
+      latestAttempt,
+      myLatest,
+      hasTaken: Boolean(myLatest),
+    };
+  });
+
+  res.json({ assessments: items });
+});
+
+exports.createAssessment = asyncHandler(async (req, res) => {
+  const ex = await loadExchange(req.params.id, req.user);
+  const isMentor = String(ex.provider?._id || ex.provider) === String(req.user._id);
+  if (!isMentor && !['admin', 'moderator'].includes(req.user.role)) {
+    throw new AppError('Only the mentor can create an evaluation test for this course', 403);
+  }
+
+  const { title, description, questions, passingScore = 70, timeLimitMinutes = 20 } = req.body;
+  if (!title || !title.trim()) throw new AppError('Assessment title is required');
+  if (!Array.isArray(questions) || questions.length < 1) throw new AppError('Please add at least 1 question');
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q.prompt || !q.prompt.trim()) throw new AppError(`Question ${i + 1} needs a question prompt`);
+    const validOptions = Array.isArray(q.options) ? q.options.filter((o) => typeof o === 'string' && o.trim()) : [];
+    if (validOptions.length < 2) throw new AppError(`Question ${i + 1} needs at least 2 choices`);
+    const cIdx = Number(q.correctIndex);
+    if (isNaN(cIdx) || cIdx < 0 || cIdx >= validOptions.length) {
+      throw new AppError(`Question ${i + 1} has an invalid correct choice selected`);
+    }
+  }
+
+  const skill = await Skill.findById(ex.skill);
+  const menteeId = ex.requester?._id || ex.requester;
+
+  const assessment = await Assessment.create({
+    title: title.trim(),
+    skillName: skill?.title || 'Course Assessment',
+    category: skill?.category || 'Other',
+    level: skill?.level || 'beginner',
+    description: (description || '').trim(),
+    createdBy: req.user._id,
+    exchange: ex._id,
+    assignedTo: menteeId,
+    questions: questions.map((q) => ({
+      prompt: q.prompt.trim(),
+      options: q.options.map((o) => o.trim()).filter(Boolean),
+      correctIndex: Number(q.correctIndex) || 0,
+      explanation: (q.explanation || '').trim(),
+      points: Number(q.points) || 1,
+    })),
+    passingScore: Math.min(100, Math.max(1, Number(passingScore) || 70)),
+    timeLimitMinutes: Math.max(1, Number(timeLimitMinutes) || 20),
+    status: 'published',
+  });
+
+  await notify(menteeId, {
+    type: 'exchange',
+    title: 'New Course Assessment Assigned',
+    body: `${req.user.name} created an evaluation test: "${assessment.title}" for ${skill?.title || 'your exchange'}. Click to attend!`,
+    link: `/exchanges/${ex._id}`,
+  });
+
+  try {
+    const convo = await getOrCreateConversation([req.user._id, menteeId], ex._id);
+    await createMessage(convo, req.user, `📝 I created a new assessment for you: "${assessment.title}" (${assessment.questions.length} questions, passing score ${assessment.passingScore}%). Take it anytime from our course workspace!`);
+  } catch (err) {
+    console.error('Chat notification error on assessment creation:', err);
+  }
+
+  res.status(201).json({ assessment });
+});
+
+exports.submitAssessment = asyncHandler(async (req, res) => {
+  const ex = await loadExchange(req.params.id, req.user);
+  const assessment = await Assessment.findOne({ _id: req.params.assessmentId, exchange: ex._id });
+  if (!assessment) throw new AppError('Assessment not found for this exchange', 404);
+
+  const answers = Array.isArray(req.body.answers) ? req.body.answers.map((v) => (v === null || v === undefined ? -1 : Number(v))) : [];
+  let earned = 0;
+  let total = 0;
+
+  const breakdown = assessment.questions.map((q, i) => {
+    const pts = q.points || 1;
+    total += pts;
+    const isCorrect = answers[i] === q.correctIndex;
+    if (isCorrect) earned += pts;
+    return {
+      prompt: q.prompt,
+      options: q.options,
+      chosenIndex: answers[i] !== undefined ? answers[i] : -1,
+      correctIndex: q.correctIndex,
+      isCorrect,
+      explanation: q.explanation || '',
+    };
+  });
+
+  const score = total > 0 ? Math.round((earned / total) * 100) : 0;
+  const passed = score >= assessment.passingScore;
+
+  const attempt = await Attempt.create({
+    assessment: assessment._id,
+    user: req.user._id,
+    exchange: ex._id,
+    answers,
+    score,
+    passed,
+    breakdown,
+    startedAt: req.body.startedAt ? new Date(req.body.startedAt) : new Date(Date.now() - 60000),
+    submittedAt: new Date(),
+  });
+
+  if (passed) {
+    await addPoints(req.user._id, POINTS.ASSESSMENT_PASSED || 25);
+  }
+
+  const mentorId = ex.provider?._id || ex.provider;
+
+  await notify(mentorId, {
+    type: 'exchange',
+    title: 'Mentee Completed Test',
+    body: `${req.user.name} completed "${assessment.title}" with score ${score}% (${passed ? 'Passed ✅' : 'Needs Practice ❌'})`,
+    link: `/exchanges/${ex._id}`,
+  });
+
+  await notify(req.user._id, {
+    type: 'exchange',
+    title: 'Test Evaluated',
+    body: `You scored ${score}% on "${assessment.title}" (${passed ? 'Passed ✅' : 'Needs Practice ❌'})`,
+    link: `/exchanges/${ex._id}`,
+  });
+
+  try {
+    const convo = await getOrCreateConversation([req.user._id, mentorId], ex._id);
+    await createMessage(convo, req.user, `🎯 I have submitted the test "${assessment.title}"! Score: ${score}% (${passed ? 'Passed ✅' : 'Needs Practice ❌'}). Both of us can view the full question breakdown in our workspace.`);
+  } catch (err) {
+    console.error('Chat notification error on assessment submit:', err);
+  }
+
+  res.json({ attempt, score, passed, breakdown });
+});
+
+exports.deleteAssessment = asyncHandler(async (req, res) => {
+  const ex = await loadExchange(req.params.id, req.user);
+  const isMentor = String(ex.provider?._id || ex.provider) === String(req.user._id);
+  if (!isMentor && !['admin', 'moderator'].includes(req.user.role)) {
+    throw new AppError('Only the mentor can remove this test', 403);
+  }
+
+  await Assessment.deleteOne({ _id: req.params.assessmentId, exchange: ex._id });
+  await Attempt.deleteMany({ assessment: req.params.assessmentId });
+  res.json({ ok: true });
 });

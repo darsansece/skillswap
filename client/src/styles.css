@@ -287,3 +287,58 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; }
 }
 .mob { display: none; }
 @media (max-width: 860px) { .mob { display: inline; } }
+
+/* Modals & Assessment Evaluation */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 26, 0.75);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+.modal {
+  width: min(720px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  position: relative;
+  border-radius: var(--radius-m);
+}
+.modal-lg {
+  width: min(840px, 100%);
+}
+.quiz-opt {
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.quiz-opt:hover {
+  background: var(--surface-2);
+}
+.quiz-opt.sel {
+  border-color: var(--teal);
+  background: var(--teal-tint);
+  font-weight: 500;
+}
+.quiz-opt.right {
+  border-color: #2DB47A;
+  background: rgba(45, 180, 122, 0.12);
+}
+.quiz-opt.wrong {
+  border-color: var(--rose);
+  background: var(--rose-tint);
+}
+.assessment-card {
+  border-left: 4px solid var(--teal);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.assessment-card:hover {
+  box-shadow: var(--shadow-m);
+}
+

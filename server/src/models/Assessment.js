@@ -16,6 +16,8 @@ const assessmentSchema = new mongoose.Schema({
   level: { type: String, enum: LEVELS, default: 'beginner' },
   description: String,
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  exchange: { type: mongoose.Schema.Types.ObjectId, ref: 'Exchange', index: true },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   questions: [questionSchema],
   passingScore: { type: Number, default: 70, min: 1, max: 100 }, // percent
   timeLimitMinutes: { type: Number, default: 20 },
@@ -26,9 +28,18 @@ const assessmentSchema = new mongoose.Schema({
 const attemptSchema = new mongoose.Schema({
   assessment: { type: mongoose.Schema.Types.ObjectId, ref: 'Assessment', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  exchange: { type: mongoose.Schema.Types.ObjectId, ref: 'Exchange', index: true },
   answers: [Number],
   score: Number, // percent
   passed: Boolean,
+  breakdown: [{
+    prompt: String,
+    options: [String],
+    chosenIndex: Number,
+    correctIndex: Number,
+    isCorrect: Boolean,
+    explanation: String,
+  }],
   startedAt: Date,
   submittedAt: Date,
 }, { timestamps: true });
