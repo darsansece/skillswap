@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { errMsg } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Coin, Empty, ErrorBox, Loading, Modal, useFetch } from '../components/ui';
 
@@ -10,12 +11,23 @@ export function SkillForm() {
   const { id } = useParams();
   const nav = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const meta = useFetch('/skills/meta');
   const [f, setF] = useState(blank);
   const [err, setErr] = useState('');
   useEffect(() => {
-    if (id) api.get(`/skills/${id}`).then(({ data }) => setF({ ...blank, ...data.skill, tags: data.skill.tags.join(', ') }));
-  }, [id]);
+    if (id) {
+      api.get(`/skills/${id}`).then(({ data }) => {
+        const isOwner = Boolean(user && data.skill?.owner && String(data.skill.owner._id || data.skill.owner) === String(user._id || user.id));
+        if (!isOwner && user?.role !== 'admin') {
+          toast('Only the mentor who created this skill can edit it.', 'err');
+          nav(`/skills/${id}`, { replace: true });
+          return;
+        }
+        setF({ ...blank, ...data.skill, tags: data.skill.tags ? data.skill.tags.join(', ') : '' });
+      }).catch((x) => setErr(errMsg(x)));
+    }
+  }, [id, user, nav, toast]);
   const up = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const submit = async (e) => {
     e.preventDefault(); setErr('');

@@ -4,7 +4,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { emitToUser, notify } = require('../services/notify');
 
 async function getOrCreateConversation(userIds, exchangeId) {
-  const ids = userIds.map(String);
+  const ids = userIds.map((u) => String(u?._id || u));
   let convo = await Conversation.findOne({ participants: { $all: ids, $size: ids.length } });
   if (!convo) convo = await Conversation.create({ participants: ids, exchange: exchangeId });
   return convo;

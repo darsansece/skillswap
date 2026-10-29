@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import api, { errMsg } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Avatar, Coin, Empty, fmtDate, useFetch } from '../components/ui';
 import { LineChart } from '../components/Charts';
 import SkillCard from './SkillCard';
@@ -9,9 +11,24 @@ export default function Dashboard() {
   const stats = useFetch('/analytics/me?days=30');
   const upcoming = useFetch('/exchanges/upcoming');
   const recs = useFetch('/ai/recommendations');
-  const pending = useFetch('/exchanges?role=mentor&status=pending&limit=5');
+  const incoming = useFetch('/exchanges?role=incoming&status=pending&limit=5');
+  const outgoing = useFetch('/exchanges?role=outgoing&status=pending&limit=5');
   const ann = useFetch('/announcements');
   const s = stats.data?.summary;
+
+  const toast = useToast();
+  const quickRespond = async (e, exId, action) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await api.post(`/exchanges/${exId}/respond`, { action });
+      toast(action === 'accept' ? 'Request accepted!' : 'Request declined');
+      incoming.reload();
+      stats.reload();
+    } catch (x) {
+      toast(errMsg(x), 'err');
+    }
+  };
 
   return (
     <div className="stack">
@@ -66,13 +83,60 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="card">
-            <h3>Requests waiting for you</h3>
-            {!pending.data?.items?.length && <p className="muted small">No pending requests.</p>}
-            {pending.data?.items?.map((e) => (
-              <Link key={e._id} to={`/exchanges/${e._id}`} className="list-link">
-                <Avatar user={e.requester} /><div><strong>{e.requester.name}</strong><div className="small muted">{e.type === 'swap' ? 'Swap' : `${e.hoursRequested}h`} · {e.skill?.title}</div></div>
-              </Link>
-            ))}
+            <div className="row between">
+              <h3 style={{ margin: 0 }}>Incoming Requests (Teaching)</h3>
+              <Link to="/exchanges?role=incoming" className="small">View all</Link>
+            </div>
+            {!incoming.data?.items?.length ? (
+              <p className="muted small" style={{ marginTop: '.5rem' }}>No incoming requests waiting for your approval.</p>
+            ) : (
+              <div className="stack" style={{ marginTop: '.75rem', gap: '.6rem' }}>
+                {incoming.data.items.map((e) => (
+                  <div key={e._id} className="card flat" style={{ padding: '.65rem', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+                    <div className="row between">
+                      <div className="row" style={{ gap: '.5rem' }}>
+                        <Avatar user={e.requester} />
+                        <div>
+                          <strong>{e.requester?.name}</strong>
+                          <div className="small muted">{e.type === 'swap' ? 'Swap' : `${e.hoursRequested}h`} · {e.skill?.title}</div>
+                        </div>
+                      </div>
+                      <div className="row" style={{ gap: '.3rem' }}>
+                        <button className="btn ghost small" onClick={(ev) => quickRespond(ev, e._id, 'decline')}>
+                          Decline
+                        </button>
+                        <button className="btn small" onClick={(ev) => quickRespond(ev, e._id, 'accept')}>
+                          Accept
+                        </button>
+                      </div>
+                    </div>
+                    {e.message && <div className="small muted" style={{ fontStyle: 'italic', paddingLeft: '.5rem' }}>"{e.message}"</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="row between">
+              <h3 style={{ margin: 0 }}>Sent Requests (Learning)</h3>
+              <Link to="/exchanges?role=outgoing" className="small">View all</Link>
+            </div>
+            {!outgoing.data?.items?.length ? (
+              <p className="muted small" style={{ marginTop: '.5rem' }}>No pending requests sent.</p>
+            ) : (
+              <div className="stack" style={{ marginTop: '.75rem', gap: '.6rem' }}>
+                {outgoing.data.items.map((e) => (
+                  <Link key={e._id} to={`/exchanges/${e._id}`} className="list-link">
+                    <Avatar user={e.provider} />
+                    <div>
+                      <strong>{e.skill?.title}</strong>
+                      <div className="small muted">Mentor: {e.provider?.name} · Waiting for approval</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
           {recs.data?.people?.length > 0 && (
             <div className="card">

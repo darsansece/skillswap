@@ -9,14 +9,14 @@ const { getOrCreateConversation } = require('./chatController');
 const { POINTS } = require('../config/constants');
 
 const POP = [
-  { path: 'requester', select: 'name avatar level stats' },
-  { path: 'provider', select: 'name avatar level stats' },
-  { path: 'skill', select: 'title category creditsPerHour mode' },
-  { path: 'offeredSkill', select: 'title category' },
+  { path: 'requester', select: 'name email avatar level stats headline location languages' },
+  { path: 'provider', select: 'name email avatar level stats headline location languages' },
+  { path: 'skill', select: 'title category creditsPerHour mode level description' },
+  { path: 'offeredSkill', select: 'title category level' },
 ];
 
-const isParty = (ex, userId) => [String(ex.requester._id || ex.requester), String(ex.provider._id || ex.provider)].includes(String(userId));
-const otherParty = (ex, userId) => (String(ex.requester._id || ex.requester) === String(userId) ? (ex.provider._id || ex.provider) : (ex.requester._id || ex.requester));
+const isParty = (ex, userId) => [String(ex.requester?._id || ex.requester), String(ex.provider?._id || ex.provider)].includes(String(userId));
+const otherParty = (ex, userId) => (String(ex.requester?._id || ex.requester) === String(userId) ? (ex.provider?._id || ex.provider) : (ex.requester?._id || ex.requester));
 
 async function loadExchange(id, user, { allowAdmin = true } = {}) {
   const ex = await Exchange.findById(id);
@@ -55,8 +55,26 @@ exports.list = asyncHandler(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
   const { role, status } = req.query;
   const me = req.user._id;
-  const filter = role === 'learner' ? { requester: me } : role === 'mentor' ? { provider: me } : { $or: [{ requester: me }, { provider: me }] };
-  if (status) filter.status = status;
+
+  let filter = { $or: [{ requester: me }, { provider: me }] };
+  if (role === 'incoming') {
+    filter = { provider: me, status: status || 'pending' };
+  } else if (role === 'outgoing') {
+    filter = { requester: me, status: status || 'pending' };
+  } else if (role === 'active') {
+    filter = { $or: [{ requester: me }, { provider: me }], status: 'accepted' };
+  } else if (role === 'completed') {
+    filter = { $or: [{ requester: me }, { provider: me }], status: { $in: ['completed', 'declined', 'cancelled'] } };
+  } else if (role === 'learner') {
+    filter = { requester: me };
+    if (status) filter.status = status;
+  } else if (role === 'mentor') {
+    filter = { provider: me };
+    if (status) filter.status = status;
+  } else if (status) {
+    filter.status = status;
+  }
+
   const [items, total] = await Promise.all([
     Exchange.find(filter).populate(POP).sort('-updatedAt').skip(skip).limit(limit),
     Exchange.countDocuments(filter),
@@ -72,14 +90,15 @@ exports.get = asyncHandler(async (req, res) => {
 
 exports.respond = asyncHandler(async (req, res) => {
   const ex = await loadExchange(req.params.id, req.user, { allowAdmin: false });
-  if (String(ex.provider) !== String(req.user._id)) throw new AppError('Only the mentor can respond to this request', 403);
+  const providerId = String(ex.provider?._id || ex.provider);
+  if (providerId !== String(req.user._id)) throw new AppError('Only the mentor can respond to this request', 403);
   if (ex.status !== 'pending') throw new AppError(`Request is already ${ex.status}`);
   const { action, note } = req.body;
   if (!['accept', 'decline'].includes(action)) throw new AppError('Action must be accept or decline');
   if (action === 'accept') {
     if (ex.type === 'credit') {
       const skill = await Skill.findById(ex.skill);
-      const amount = Math.ceil(ex.hoursRequested * skill.creditsPerHour);
+      const amount = Math.ceil(ex.hoursRequested * (skill?.creditsPerHour || 0));
       await credits.hold(ex.requester, amount, ex._id);
       ex.escrowCredits = amount;
     }
@@ -119,9 +138,8 @@ async function hasConflict(userIds, start, end, excludeSessionId) {
 exports.scheduleSession = asyncHandler(async (req, res) => {
   const ex = await loadExchange(req.params.id, req.user, { allowAdmin: false });
   if (ex.status !== 'accepted') throw new AppError('Sessions can only be scheduled on accepted exchanges');
-  const { startTime, durationMinutes = 60, meetingLink, location, agenda, teacher } = req.body;
   const start = new Date(startTime);
-  if (Number.isNaN(start.getTime()) || start < new Date()) throw new AppError('Choose a start time in the future');
+  if (Number.isNaN(start.getTime()) || start.getTime() < Date.now() - 5 * 60000) throw new AppError('Choose a valid start time');
   const end = start.getTime() + durationMinutes * 60000;
   if (await hasConflict([ex.requester, ex.provider], start.getTime(), end)) throw new AppError('This time overlaps another scheduled session for one of you', 409);
   const plannedMinutes = ex.sessions.filter((s) => s.status !== 'cancelled').reduce((a, s) => a + s.durationMinutes, 0);

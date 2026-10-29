@@ -6,14 +6,34 @@ const tokens = {
   get access() { return localStorage.getItem('ss_access'); },
   get refresh() { return localStorage.getItem('ss_refresh'); },
   set({ accessToken, refreshToken }) {
-    if (accessToken) localStorage.setItem('ss_access', accessToken);
+    if (accessToken) {
+      localStorage.setItem('ss_access', accessToken);
+      api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+    }
     if (refreshToken) localStorage.setItem('ss_refresh', refreshToken);
   },
-  clear() { localStorage.removeItem('ss_access'); localStorage.removeItem('ss_refresh'); },
+  clear() {
+    localStorage.removeItem('ss_access');
+    localStorage.removeItem('ss_refresh');
+    delete api.defaults.headers.common.Authorization;
+  },
 };
 
+// Initialize authorization header on app start if token is already present
+if (tokens.access) {
+  api.defaults.headers.common.Authorization = `Bearer ${tokens.access}`;
+}
+
 api.interceptors.request.use((config) => {
-  if (tokens.access) config.headers.Authorization = `Bearer ${tokens.access}`;
+  const token = tokens.access;
+  if (token) {
+    if (config.headers?.set) {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
   return config;
 });
 
@@ -22,17 +42,27 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && tokens.refresh && !original._retry && !original.url.includes('/auth/')) {
+    if (error.response?.status === 401 && tokens.refresh && !original._retry && !original.url?.includes('/auth/')) {
       original._retry = true;
       try {
-        refreshing = refreshing || axios.post(`${api.defaults.baseURL}/auth/refresh`, { refreshToken: tokens.refresh });
+        if (!refreshing) {
+          refreshing = axios.post(`${api.defaults.baseURL}/auth/refresh`, { refreshToken: tokens.refresh });
+        }
         const { data } = await refreshing;
         tokens.set(data);
+        if (original.headers?.set) {
+          original.headers.set('Authorization', `Bearer ${data.accessToken}`);
+        } else {
+          original.headers = original.headers || {};
+          original.headers.Authorization = `Bearer ${data.accessToken}`;
+        }
         return api(original);
       } catch (e) {
         tokens.clear();
         window.dispatchEvent(new Event('ss:logout'));
-      } finally { refreshing = null; }
+      } finally {
+        refreshing = null;
+      }
     }
     return Promise.reject(error);
   },
@@ -41,3 +71,4 @@ api.interceptors.response.use(
 export const errMsg = (e) => e?.response?.data?.message || e?.message || 'Something went wrong';
 export { tokens };
 export default api;
+

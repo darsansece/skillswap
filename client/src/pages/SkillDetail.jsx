@@ -62,7 +62,7 @@ export default function SkillDetail() {
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} />;
   const { skill, reviews, related } = data;
-  const own = skill.owner._id === user._id;
+  const own = Boolean(user && skill?.owner && String(skill.owner._id || skill.owner) === String(user._id || user.id));
   const mark = bookmarked ?? (user.bookmarks || []).includes(skill._id);
   const toggleBookmark = async () => { const r = await api.post(`/users/me/bookmarks/${skill._id}`); setBookmarked(r.data.bookmarked); toast(r.data.bookmarked ? 'Saved to bookmarks' : 'Removed from bookmarks'); };
   const message = async () => { const r = await api.post('/conversations', { userId: skill.owner._id }); nav(`/messages/${r.data.conversation._id}`); };
