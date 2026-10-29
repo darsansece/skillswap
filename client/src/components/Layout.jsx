@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../api/client';
-import { Avatar, Coin, timeAgo } from './ui';
+import { Avatar, Coin, ErrorBoundary, timeAgo } from './ui';
 
 const NAV = [
   ['Explore', [['/', 'Dashboard'], ['/marketplace', 'Marketplace'], ['/assistant', 'Learning assistant']]],
@@ -52,11 +52,11 @@ function Notifications() {
 }
 
 export default function Layout() {
-  const { user, logout, isStaff } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ss_theme') || '');
-  useEffect(() => setOpen(false), [loc.pathname]);
+  useEffect(() => { setOpen(false); }, [loc.pathname]);
   useEffect(() => {
     if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
     localStorage.setItem('ss_theme', theme);
@@ -74,7 +74,7 @@ export default function Layout() {
             {links.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'} className="nav">{label}</NavLink>)}
           </div>
         ))}
-        {isStaff && (<div><div className="group">Administration</div><NavLink to="/admin" className="nav">Admin panel</NavLink></div>)}
+        {isAdmin && (<div><div className="group">Administration</div><NavLink to="/admin" className="nav">Admin panel</NavLink></div>)}
         <div className="foot">
           <NavLink to="/profile" className="nav"><span className="row" style={{ gap: '.5rem' }}><Avatar user={user} /> <span>{user.name}<br /><span className="small" style={{ color: '#8590A8' }}>Level {user.level}</span></span></span></NavLink>
           <button className="btn ghost small logout" onClick={logout}>Log out</button>
@@ -88,7 +88,7 @@ export default function Layout() {
           <button className="btn ghost small" onClick={() => setTheme(dark ? 'light' : 'dark')} aria-label="Toggle dark mode">{dark ? 'Light' : 'Dark'}</button>
           <button className="btn ghost small desk" onClick={logout}>Log out</button>
         </header>
-        <main className="content"><Outlet /></main>
+        <main className="content"><ErrorBoundary><Outlet /></ErrorBoundary></main>
       </div>
     </div>
   );

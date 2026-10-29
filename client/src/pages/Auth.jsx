@@ -8,12 +8,15 @@ function AuthShell({ children }) {
   return (
     <div className="auth">
       <section className="pitch">
+        <Link to="/" className="brand" style={{ marginBottom: '2.5rem' }}>
+          <span className="coin big" style={{ fontSize: '1.75rem' }} /> SkillSwap
+        </Link>
         <h1>Trade what you know for what you want to learn.</h1>
         <p>Teach an hour, earn a credit. Spend it learning guitar, Spanish or sourdough from someone in your community — or swap skills directly.</p>
         <div className="ledger" aria-hidden="true">
           <div><span>Taught Python, 1 hour</span><span className="coin">+2</span></div>
           <div><span>Learned guitar, 1 hour</span><span className="coin">−2</span></div>
-          <div><span>Swapped Spanish for baking</span><span>even</span></div>
+          <div><span>Swapped Spanish for baking</span><span className="chip" style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: '0.8rem' }}>even</span></div>
         </div>
       </section>
       <section className="form">{children}</section>

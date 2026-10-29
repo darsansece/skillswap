@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import api, { errMsg } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -215,13 +215,20 @@ function Audit() {
 }
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  if (!isAdmin) return <Navigate to="/" replace />;
   const [tab, setTab] = useState('overview');
-  const tabs = [['overview', 'Analytics'], ['users', 'Members'], ['reports', 'Reports'], ['verify', 'Verification'], ['ann', 'Announcements']];
-  if (user.role === 'admin') tabs.push(['audit', 'Audit log']);
+  const tabs = [
+    ['overview', 'Analytics'],
+    ['users', 'Members'],
+    ['reports', 'Reports'],
+    ['verify', 'Verification'],
+    ['ann', 'Announcements'],
+    ['audit', 'Audit log'],
+  ];
   return (
     <div>
-      <div className="page-head"><div><h1>Admin panel</h1><p className="muted">Signed in as {user.role}.</p></div></div>
+      <div className="page-head"><div><h1>Admin panel</h1><p className="muted">Signed in as {user.name} ({user.email}).</p></div></div>
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
       {tab === 'overview' && <Overview />}
       {tab === 'users' && <Users />}

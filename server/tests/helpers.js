@@ -20,16 +20,18 @@ async function connect() {
     if (!url.searchParams.has('directConnection') && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')) {
       url.searchParams.set('directConnection', 'true');
     }
-    await mongoose.connect(url.toString());
+    await mongoose.connect(url.toString(), { serverSelectionTimeoutMS: 5000 });
   } catch (err) {
     const uri = `${base.replace(/\/+$/, '')}/${dbName}`;
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
   }
 }
 
 async function disconnect() {
-  await mongoose.connection.dropDatabase().catch(() => null);
-  await mongoose.disconnect();
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.connection.dropDatabase().catch(() => null);
+    await mongoose.disconnect().catch(() => null);
+  }
   if (memServer) await memServer.stop();
 }
 

@@ -36,8 +36,9 @@ export function AuthProvider({ children }) {
     tokens.clear(); setUser(null);
   };
 
-  const isStaff = user && ['admin', 'moderator'].includes(user.role);
-  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, logout, refreshMe, isStaff }}>{children}</AuthCtx.Provider>;
+  const isAdmin = Boolean(user && user.email && user.email.toLowerCase() === 'admin@skillswap.dev');
+  const isStaff = Boolean(user && (isAdmin || ['admin', 'moderator'].includes(user.role)));
+  return <AuthCtx.Provider value={{ user, setUser, loading, login, register, logout, refreshMe, isStaff, isAdmin }}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => useContext(AuthCtx);

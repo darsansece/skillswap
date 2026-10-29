@@ -15,12 +15,12 @@ import { Learn, TakeAssessment, CreateAssessment, VerifyCertificate } from './pa
 import { ForumList, ForumPost, NewPost } from './pages/Forum';
 import Admin from './pages/admin/Admin';
 
-function Private({ children, staff }) {
-  const { user, loading, isStaff } = useAuth();
+function Private({ children, adminOnly }) {
+  const { user, loading, isAdmin } = useAuth();
   const loc = useLocation();
   if (loading) return <div className="content"><p className="muted">Loading…</p></div>;
   if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
-  if (staff && !isStaff) return <Navigate to="/" replace />;
+  if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -60,7 +60,7 @@ export default function App() {
         <Route path="forum" element={<ForumList />} />
         <Route path="forum/new" element={<NewPost />} />
         <Route path="forum/:id" element={<ForumPost />} />
-        <Route path="admin/*" element={<Private staff><Admin /></Private>} />
+        <Route path="admin/*" element={<Private adminOnly><Admin /></Private>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

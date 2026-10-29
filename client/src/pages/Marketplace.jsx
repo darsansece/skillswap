@@ -9,7 +9,7 @@ export default function Marketplace() {
   const [q, setQ] = useState(params.get('q') || '');
   const qs = params.toString();
   const list = useFetch(`/skills?limit=12&${qs}`, [qs]);
-  useEffect(() => setQ(params.get('q') || ''), [params]);
+  useEffect(() => { setQ(params.get('q') || ''); }, [params]);
 
   const set = (k, v) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); if (k !== 'page') p.delete('page'); setParams(p); };
   const sel = (k, opts, label) => (
